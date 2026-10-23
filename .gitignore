@@ -1,0 +1,30 @@
+# Python environment and bytecode
+.venv/
+__pycache__/
+*.py[cod]
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+
+# Test, lint, and coverage artifacts
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local caches and media
+.cache/
+downloads/
+media/
+previews/
+
+# Local environment settings
+.env
+.env.*
+!.env.example
+
+# macOS metadata
+.DS_Store
