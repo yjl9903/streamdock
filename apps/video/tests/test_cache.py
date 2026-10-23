@@ -5,17 +5,17 @@ from contextlib import closing, contextmanager, nullcontext
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from PIL import Image
 
-from streamdock.commands.video.cache import prepare_cache
-from streamdock.commands.video.playback import VideoOptions
-from streamdock.commands.video.player import VideoPlayer
-from tests.commands.video.test_controls import ScheduledControls
+from apps.video.cache import prepare_cache
+from apps.video.playback import VideoOptions
+from apps.video.player import VideoPlayer
+from apps.video.tests.test_controls import ScheduledControls
 
 
-class FrameCacheTests(unittest.TestCase):
+class FrameCacheTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -28,9 +28,7 @@ class FrameCacheTests(unittest.TestCase):
     def build(self, options=None, force=False):
         options = options or self.options
         frames = [Image.new("RGB", options.size, color) for color in ("red", "green", "blue")]
-        with patch(
-            "streamdock.commands.video.cache.decode_frames", return_value=nullcontext(iter(frames))
-        ):
+        with patch("apps.video.cache.decode_frames", return_value=nullcontext(iter(frames))):
             return prepare_cache(
                 self.source,
                 options,
@@ -44,12 +42,10 @@ class FrameCacheTests(unittest.TestCase):
         cache = self.build()
         with (
             patch(
-                "streamdock.commands.video.cache.decode_frames",
+                "apps.video.cache.decode_frames",
                 side_effect=AssertionError("decoded"),
             ),
-            patch(
-                "streamdock.commands.video.cache.jpeg_tiles", side_effect=AssertionError("encoded")
-            ),
+            patch("apps.video.cache.jpeg_tiles", side_effect=AssertionError("encoded")),
         ):
             reused = prepare_cache(
                 self.source,
@@ -62,9 +58,7 @@ class FrameCacheTests(unittest.TestCase):
             with reused.reader() as reader:
                 frames = list(reader.frames(1, 3))
         self.assertEqual(len(frames), 2)
-        self.assertEqual(
-            [slot for slot, _ in frames[0]], [11, 12, 13, 14, 15, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5]
-        )
+        self.assertEqual([slot for slot, _ in frames[0]], list(range(1, 16)))
         with Image.open(BytesIO(frames[-1][0][1])) as image:
             self.assertEqual(image.size, (64, 64))
             self.assertGreater(image.getpixel((32, 32))[2], 245)
@@ -95,7 +89,7 @@ class FrameCacheTests(unittest.TestCase):
 
             yield frames()
 
-        with patch("streamdock.commands.video.cache.decode_frames", interrupted):
+        with patch("apps.video.cache.decode_frames", interrupted):
             with self.assertRaises(KeyboardInterrupt):
                 prepare_cache(
                     self.source,
@@ -131,28 +125,26 @@ class FrameCacheTests(unittest.TestCase):
 
             yield frames()
 
-        with patch("streamdock.commands.video.cache.decode_frames", changing_source):
+        with patch("apps.video.cache.decode_frames", changing_source):
             with self.assertRaisesRegex(RuntimeError, "发生变化"):
                 prepare_cache(
                     self.source, self.options, 1.5, directory=self.directory, report=lambda _: None
                 )
         self.assertEqual(list(self.directory.iterdir()), [])
 
-    def test_player_pause_seek_and_loop_only_read_cached_jpegs(self):
+    async def test_player_pause_seek_and_loop_only_read_cached_jpegs(self):
         cache = self.build()
         now = [0.0]
         controls = ScheduledControls(
             now, [(0.1, "pause"), (0.2, "forward"), (0.3, "rewind"), (0.4, "pause")]
         )
         with (
-            patch("streamdock.commands.video.player.video_duration", return_value=1.5),
+            patch("apps.video.player.video_duration", return_value=1.5),
             patch(
-                "streamdock.commands.video.player.decode_frames",
+                "apps.video.player.decode_frames",
                 side_effect=AssertionError("decoded"),
             ),
-            patch(
-                "streamdock.commands.video.player.jpeg_tiles", side_effect=AssertionError("encoded")
-            ),
+            patch("apps.video.player.jpeg_tiles", side_effect=AssertionError("encoded")),
         ):
             player = VideoPlayer(
                 self.source,
@@ -163,7 +155,7 @@ class FrameCacheTests(unittest.TestCase):
                 report=lambda _: None,
             )
             player.cache = cache
-            sink = Mock()
+            sink = Mock(send=AsyncMock(), check_connection=AsyncMock())
 
             def stop_after_loop(tiles):
                 self.assertEqual(len(tiles), 15)
@@ -172,14 +164,14 @@ class FrameCacheTests(unittest.TestCase):
 
             sink.send.side_effect = stop_after_loop
             with self.assertRaises(KeyboardInterrupt):
-                player.run(sink)
+                await player.run(sink)
             self.assertEqual(sink.send.call_count, 6)
 
-    def test_cached_loop_holds_last_frame_for_full_interval(self):
+    async def test_cached_loop_holds_last_frame_for_full_interval(self):
         cache = self.build()
         now = [0.0]
         times = []
-        with patch("streamdock.commands.video.player.video_duration", return_value=1.5):
+        with patch("apps.video.player.video_duration", return_value=1.5):
             player = VideoPlayer(
                 self.source,
                 self.options,
@@ -188,7 +180,7 @@ class FrameCacheTests(unittest.TestCase):
                 clock=lambda: now[0],
             )
         player.cache = cache
-        sink = Mock()
+        sink = Mock(send=AsyncMock(), check_connection=AsyncMock())
 
         def send(tiles):
             times.append(now[0])
@@ -197,30 +189,28 @@ class FrameCacheTests(unittest.TestCase):
 
         sink.send.side_effect = send
         with self.assertRaises(KeyboardInterrupt):
-            player.run(sink)
+            await player.run(sink)
         self.assertEqual(times, [0, 0.5, 1, 1.5, 2])
 
-    def test_cached_resume_starts_at_saved_position_without_transcoding(self):
+    async def test_cached_resume_starts_at_saved_position_without_transcoding(self):
         cache = self.build()
         now = [300.0]
         with (
-            patch("streamdock.commands.video.player.video_duration", return_value=1.5),
+            patch("apps.video.player.video_duration", return_value=1.5),
             patch(
-                "streamdock.commands.video.player.decode_frames",
+                "apps.video.player.decode_frames",
                 side_effect=AssertionError("decoded"),
             ),
-            patch(
-                "streamdock.commands.video.player.jpeg_tiles", side_effect=AssertionError("encoded")
-            ),
+            patch("apps.video.player.jpeg_tiles", side_effect=AssertionError("encoded")),
         ):
             player = VideoPlayer(
                 self.source, self.options, controls=ScheduledControls(now), clock=lambda: now[0]
             )
             player.cache = cache
             player.position = 0.5
-            sink = Mock()
+            sink = Mock(send=AsyncMock(), check_connection=AsyncMock())
             positions = []
             sink.send.side_effect = lambda tiles: positions.append(player.position)
-            stats = player.run(sink)
+            stats = await player.run(sink)
         self.assertEqual(positions, [0.5, 1.0])
         self.assertEqual(stats["dropped_frames"], 0)

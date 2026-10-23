@@ -1,10 +1,12 @@
-"""Interactive player; only the playback thread decodes or writes images."""
+"""Async video timeline with blocking decoding/cache reads on one private worker."""
 
+import asyncio
 import json
 import math
 import shutil
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
@@ -89,9 +91,9 @@ class VideoPlayer:
         self.cache = None
         self.stats = {"sent_frames": 0, "dropped_frames": 0, "loops": 0}
 
-    def prepare_cache(self, *, force=False):
+    def prepare_cache(self, *, force=False, cancel=None):
         self.cache = prepare_cache(
-            self.path, self.options, self.duration, force=force, report=self.report
+            self.path, self.options, self.duration, force=force, report=self.report, cancel=cancel
         )
         first, end = frame_range(self.start, self.end, self.options.fps, self.cache.count)
         if first >= end:
@@ -100,19 +102,34 @@ class VideoPlayer:
         self.end = min(self.end, end / self.options.fps)
         self.position = self.start
 
-    def run(self, sink):
+    async def run(self, sink):
         interval = 1 / self.options.fps
         pending = None
         anchor = None
         pause_started = None
         preview = False
 
-        with ExitStack() as resources, ExitStack() as decoders:
+        resources, decoders = ExitStack(), ExitStack()
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="decklet-video")
+        loop = asyncio.get_running_loop()
+
+        async def work(function, *args):
+            return await loop.run_in_executor(executor, function, *args)
+
+        def close_sources():
+            try:
+                decoders.close()
+            finally:
+                resources.close()
+
+        try:
             cached = (
-                resources.enter_context(self.cache.reader()) if self.cache is not None else None
+                await work(resources.enter_context, self.cache.reader())
+                if self.cache is not None
+                else None
             )
 
-            def seek(target):
+            def seek_source(target):
                 nonlocal frames, offset, index, anchor, pending, preview
                 # Keep a complete final sampling interval available when seeking.
                 target = max(self.start, min(target, max(self.start, self.end - interval)))
@@ -135,7 +152,7 @@ class VideoPlayer:
                 pending = None
                 preview = self.paused
 
-            def apply(action):
+            async def apply(action):
                 nonlocal anchor, pause_started
                 if action == "pause":
                     now = self.clock()
@@ -147,27 +164,29 @@ class VideoPlayer:
                     self.report(f"{'暂停' if self.paused else '继续'}：{self.position:.1f}s")
                 elif action in ("rewind", "forward"):
                     delta = -self.SEEK_SECONDS if action == "rewind" else self.SEEK_SECONDS
-                    seek(self.position + delta)
+                    await work(seek_source, self.position + delta)
                     self.report(f"{'快退' if delta < 0 else '快进'}至 {self.position:.1f}s")
 
             frames = None
             offset = self.start
             index = 0
-            seek(self.position)
+            await work(seek_source, self.position)
             while True:
-                sink.check_connection()
-                action = self.controls.get()
+                await sink.check_connection()
+                action = await self.controls.get()
                 if action is not None:
-                    apply(action)
+                    await apply(action)
                     continue
                 if self.paused and not preview:
-                    action = self.controls.get(timeout=0.1)
+                    action = await self.controls.get(timeout=0.1)
                     if action is not None:
-                        apply(action)
+                        await apply(action)
                     continue
                 if pending is None:
                     try:
-                        pending = next(frames)
+                        pending = await work(next, frames, None)
+                        if pending is None:
+                            raise StopIteration
                     except StopIteration:
                         # Hold the final frame for its full interval, including
                         # when the next loop can start immediately from cache.
@@ -175,15 +194,15 @@ class VideoPlayer:
                             0 if anchor is None else anchor + index * interval - self.clock()
                         )
                         if remaining > 0:
-                            action = self.controls.get(timeout=remaining)
-                            sink.check_connection()
+                            action = await self.controls.get(timeout=remaining)
+                            await sink.check_connection()
                             if action is not None:
-                                apply(action)
+                                await apply(action)
                                 continue
                         if not self.loop:
                             break
                         self.stats["loops"] += 1
-                        seek(self.start)
+                        await work(seek_source, self.start)
                         continue
                     if anchor is None:
                         anchor = self.clock()
@@ -193,18 +212,26 @@ class VideoPlayer:
                 if not self.paused:
                     remaining = deadline - self.clock()
                     if remaining > 0:
-                        action = self.controls.get(timeout=remaining)
-                        sink.check_connection()
+                        action = await self.controls.get(timeout=remaining)
+                        await sink.check_connection()
                         if action is not None:
-                            apply(action)
+                            await apply(action)
                             continue
                 self.position = offset + index * interval
                 if not self.paused and self.clock() >= deadline + interval:
                     self.stats["dropped_frames"] += 1
                 else:
-                    sink.send(pending if cached is not None else jpeg_tiles(pending, self.options))
+                    tiles = (
+                        pending
+                        if cached is not None
+                        else await work(jpeg_tiles, pending, self.options)
+                    )
+                    await sink.send(tiles)
                     self.stats["sent_frames"] += 1
                 pending = None
                 index += 1
                 preview = False
+        finally:
+            await work(close_sources)
+            executor.shutdown(wait=True)
         return dict(self.stats)

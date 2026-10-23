@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from streamdock.commands.video.playback import (
+from apps.video.playback import (
     VideoOptions,
     decode_frames,
     export_preview,
@@ -25,9 +25,7 @@ class GapTests(unittest.TestCase):
             left, top = column * 72, row * 72
             frame.paste((index * 16,) * 3, (left, top, left + 64, top + 64))
         tiles = jpeg_tiles(frame, options)
-        self.assertEqual(
-            [slot for slot, _ in tiles], [11, 12, 13, 14, 15, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5]
-        )
+        self.assertEqual([slot for slot, _ in tiles], list(range(1, 16)))
         for index, (_, data) in enumerate(tiles):
             with Image.open(io.BytesIO(data)) as tile:
                 self.assertEqual(tile.size, (64, 64))

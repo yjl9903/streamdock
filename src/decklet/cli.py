@@ -3,9 +3,10 @@
 import argparse
 import json
 import sys
+import traceback
 from dataclasses import asdict
 
-from .commands.video.cli import register as register_video_commands
+from .commands.run import register as register_run_command
 from .device import M18V25E
 
 
@@ -37,8 +38,8 @@ def show_devices(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="streamdock",
-        description="streamdock 控制",
+        prog="decklet",
+        description="Decklet 可编程按键屏应用",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("info", help="输出设备参考资料及按键布局（JSON）").set_defaults(
@@ -46,16 +47,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     devices = commands.add_parser("devices", help="枚举已连接设备")
     devices.set_defaults(handler=show_devices)
-    register_video_commands(commands)
+    register_run_command(commands)
     args = parser.parse_args(argv)
 
     try:
         return args.handler(args)
     except KeyboardInterrupt:
-        print("\n已停止播放。", file=sys.stderr)
+        print("\n已停止。", file=sys.stderr)
         return 130
-    except (OSError, RuntimeError, ValueError) as exc:
-        print(f"错误：{exc}", file=sys.stderr)
+    except Exception as exc:
+        if args.command == "run":
+            traceback.print_exc()
+        else:
+            print(f"错误：{exc}", file=sys.stderr)
         return 1
 
 

@@ -15,12 +15,13 @@ from pathlib import Path
 
 from PIL import __version__ as pillow_version
 
-from ...device import M18V25E
+from decklet import M18V25E
+
 from .playback import VideoOptions, decode_frames, jpeg_tiles
 
 DEFAULT_CACHE_DIR = Path(".cache/videos")
 # Bump whenever the encoded frame format or rendering semantics change.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 
 
 def cache_identity(path: Path, options: VideoOptions) -> dict:
@@ -36,7 +37,8 @@ def cache_identity(path: Path, options: VideoOptions) -> dict:
         "size": stat.st_size,
         "mtime_ns": stat.st_mtime_ns,
         "settings": settings,
-        "image_slots": M18V25E.image_slots,
+        "screen_keys": M18V25E.screen_keys,
+        "key_image_size": M18V25E.key_image_size,
         "pillow": pillow_version,
     }
 
@@ -124,9 +126,8 @@ class CacheReader:
 
 def expected_slots(options: VideoOptions) -> tuple[int, ...]:
     if options.key is None:
-        return tuple(slot for row in M18V25E.image_slots for slot in row)
-    row, column = divmod(options.key - 1, 5)
-    return (M18V25E.image_slots[row][column],)
+        return M18V25E.screen_keys
+    return (options.key,)
 
 
 def load_cache(path: Path, identity: dict, options: VideoOptions) -> FrameCache | None:
@@ -160,6 +161,7 @@ def prepare_cache(
     directory: Path = DEFAULT_CACHE_DIR,
     force=False,
     report=print,
+    cancel=None,
 ) -> FrameCache:
     identity = cache_identity(path, options)
     cache_key = hashlib.sha256(identity_json(identity).encode()).hexdigest()
@@ -190,6 +192,8 @@ def prepare_cache(
             last_report = time.monotonic()
             with decode_frames(path, source_options) as frames:
                 for frame in frames:
+                    if cancel is not None and cancel.is_set():
+                        raise RuntimeError("视频缓存生成已取消")
                     payload = pack_tiles(jpeg_tiles(frame, source_options))
                     connection.execute(
                         "INSERT INTO frames VALUES (?, ?, ?)", (count, payload, zlib.crc32(payload))
@@ -217,6 +221,8 @@ def prepare_cache(
         finally:
             connection.close()
         # Readers only see complete caches. Interrupted rebuilds retain the old file.
+        if cancel is not None and cancel.is_set():
+            raise RuntimeError("视频缓存生成已取消")
         os.replace(staging, destination)
     report(f"视频缓存已生成：{count} 帧，{destination.stat().st_size / 1024**2:.1f} MiB")
     return FrameCache(destination, options.fps, count, expected_slots(options))

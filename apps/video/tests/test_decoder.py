@@ -6,7 +6,7 @@ import unittest
 from itertools import islice
 from pathlib import Path
 
-from streamdock.commands.video.playback import VideoOptions, decode_frames, playback_frames
+from apps.video.playback import VideoOptions, decode_frames, playback_frames
 
 
 @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is not installed")

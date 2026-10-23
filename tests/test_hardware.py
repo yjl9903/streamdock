@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from streamdock.hardware import DeviceSink, DeviceUnavailable, open_device
+from decklet.hardware import DeviceSink, DeviceUnavailable, open_device
 
 
 class BundledSDKTests(unittest.TestCase):
@@ -20,7 +20,7 @@ class BundledSDKTests(unittest.TestCase):
                     "-c",
                     """
 import sys
-from streamdock.hardware import load_sdk
+from decklet.hardware import load_sdk
 before = list(sys.path)
 manager, device = load_sdk()
 assert manager.__module__.startswith("streamdock._vendor.mirabox.")
@@ -38,6 +38,18 @@ assert before == sys.path
 
 
 class HardwareTests(unittest.TestCase):
+    def test_callback_is_restored_after_failure(self):
+        device = Mock()
+        previous = device.key_callback
+        callback = Mock()
+        with self.assertRaises(RuntimeError):
+            with DeviceSink(device).key_events(callback):
+                raise RuntimeError("failure")
+        self.assertEqual(
+            [call.args for call in device.set_key_callback.call_args_list],
+            [(callback,), (previous,)],
+        )
+
     def test_failed_send_does_not_refresh_partial_frame(self):
         device = Mock()
         device.transport.can_write.return_value = True
@@ -57,7 +69,7 @@ class HardwareTests(unittest.TestCase):
         device.set_device = Mock()
         device.wakeScreen = Mock()
         device.transport = Mock()
-        with patch("streamdock.hardware.enumerate_devices", return_value=([device], M18)):
+        with patch("decklet.hardware.enumerate_devices", return_value=([device], M18)):
             with self.assertRaisesRegex(RuntimeError, "decode failure"):
                 with open_device():
                     raise RuntimeError("decode failure")
@@ -67,8 +79,8 @@ class HardwareTests(unittest.TestCase):
     def test_wake_detected_when_monotonic_clock_does_not_advance(self):
         device = Mock()
         with (
-            patch("streamdock.hardware.time.time", side_effect=[10, 310]),
-            patch("streamdock.hardware.time.monotonic", side_effect=[1, 1.1]),
+            patch("decklet.hardware.time.time", side_effect=[10, 310]),
+            patch("decklet.hardware.time.monotonic", side_effect=[1, 1.1]),
         ):
             sink = DeviceSink(device)
             with self.assertRaisesRegex(DeviceUnavailable, "睡眠"):
@@ -79,8 +91,8 @@ class HardwareTests(unittest.TestCase):
         device = Mock()
         device.transport.enumerate_devices.return_value = []
         with (
-            patch("streamdock.hardware.time.time", side_effect=[0, 1]),
-            patch("streamdock.hardware.time.monotonic", side_effect=[0, 1]),
+            patch("decklet.hardware.time.time", side_effect=[0, 1]),
+            patch("decklet.hardware.time.monotonic", side_effect=[0, 1]),
         ):
             sink = DeviceSink(device)
             with self.assertRaisesRegex(DeviceUnavailable, "断开"):
@@ -92,8 +104,8 @@ class HardwareTests(unittest.TestCase):
         device.transport.enumerate_devices.return_value = [{"path": "usb-path"}]
         device.transport.get_last_error.side_effect = ["", "IOHIDDeviceSetReport failed"]
         with (
-            patch("streamdock.hardware.time.time", side_effect=[0, 1]),
-            patch("streamdock.hardware.time.monotonic", side_effect=[0, 1]),
+            patch("decklet.hardware.time.time", side_effect=[0, 1]),
+            patch("decklet.hardware.time.monotonic", side_effect=[0, 1]),
         ):
             sink = DeviceSink(device)
             with self.assertRaisesRegex(DeviceUnavailable, "USB 通信失败"):

@@ -7,8 +7,8 @@ from contextlib import contextmanager
 def load_sdk():
     """Load SDK classes and the native library without enumerating USB devices."""
     try:
-        from ._vendor.mirabox.DeviceManager import DeviceManager
-        from ._vendor.mirabox.Devices.StreamDockM18 import StreamDockM18
+        from streamdock._vendor.mirabox.DeviceManager import DeviceManager
+        from streamdock._vendor.mirabox.Devices.StreamDockM18 import StreamDockM18
     except (ImportError, OSError, AttributeError) as exc:
         raise RuntimeError(f"官方 SDK / 原生通信库加载失败：{exc}") from exc
     return DeviceManager, StreamDockM18
@@ -28,7 +28,7 @@ def describe_devices():
                 "serial": device.serial_number,
                 "vendor_id": f"{device.vendor_id:04x}",
                 "product_id": f"{device.product_id:04x}",
-                "playback_supported": isinstance(device, m18_class),
+                "runtime_supported": isinstance(device, m18_class),
             }
             for device in devices
         ]
@@ -38,7 +38,7 @@ def describe_devices():
 
 
 class DeviceUnavailable(RuntimeError):
-    """A transient device failure that playback can recover from."""
+    """A transient device failure that the application runtime can recover from."""
 
 
 class DeviceSink:

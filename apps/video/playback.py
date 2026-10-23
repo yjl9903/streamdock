@@ -6,12 +6,12 @@ import tempfile
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
 
-from ...device import M18V25E
+from decklet import M18V25E
+from decklet.rendering import encode_canvas, encode_key
 
 
 @dataclass(frozen=True)
@@ -24,12 +24,16 @@ class VideoOptions:
     gap: int = 0
 
     def __post_init__(self):
+        if not 1 <= self.fps <= 30:
+            raise ValueError("fps 必须在 1..30 范围内")
+        if self.key is not None and self.key not in M18V25E.screen_keys:
+            raise ValueError("按键编号必须在 1..15 范围内")
         if self.gap < 0:
             raise ValueError("按键间距不能为负数")
 
     @property
     def size(self) -> tuple[int, int]:
-        return (64, 64) if self.key is not None else (320 + 4 * self.gap, 192 + 2 * self.gap)
+        return M18V25E.key_image_size if self.key is not None else M18V25E.canvas_size(self.gap)
 
 
 def input_command(path: Path, options: VideoOptions) -> list[str]:
@@ -141,19 +145,12 @@ def playback_frames(path: Path, options: VideoOptions, *, loop: bool = False):
 
 
 def jpeg_tiles(frame: Image.Image, options: VideoOptions) -> list[tuple[int, bytes]]:
-    """Return hardware slots and JPEG bytes; map logical keys exactly once."""
+    """Cache logical keys and JPEGs; the library owns hardware slot conversion."""
     if frame.size != options.size:
         raise ValueError(f"帧尺寸应为 {options.size}，实际为 {frame.size}")
-    tiles = []
-    keys = [options.key] if options.key is not None else range(1, 16)
-    for key in keys:
-        row, column = divmod(key - 1, 5)
-        left, top = column * (64 + options.gap), row * (64 + options.gap)
-        tile = frame if options.key is not None else frame.crop((left, top, left + 64, top + 64))
-        with BytesIO() as output:
-            tile.save(output, format="JPEG", quality=options.quality)
-            tiles.append((M18V25E.image_slots[row][column], output.getvalue()))
-    return tiles
+    if options.key is not None:
+        return [(options.key, encode_key(frame, quality=options.quality))]
+    return encode_canvas(frame, gap=options.gap, quality=options.quality)
 
 
 def play_frames(frames, sink, options: VideoOptions, *, clock=time.monotonic, sleep=time.sleep):

@@ -1,1 +1,1 @@
-"""Local integration for Mirabox StreamDock devices."""
+"""Private SDK namespace retained for pinned vendor imports; use decklet for apps."""

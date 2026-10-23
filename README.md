@@ -1,71 +1,79 @@
-# StreamDock
+# Decklet
 
-在 macOS 上将本地视频拼接播放到 Mirabox M18 的 **15 个按键屏**，也可单键播放或导出离线预览。当前适配目标为 **M18V25E**，所有播放均无音频。
+Decklet 是用 Python 脚本编写按键屏应用的框架，当前支持 StreamDock 设备：库提供设备连接、按键事件、图片渲染和断线重连，CLI 加载用户导出的 `App`，脚本负责画面与交互。
 
-支持片段播放、循环、底部按键暂停与跳转，以及按键间距补偿。设备画面效果仍待实机确认，验证范围见[开发指南](docs/development.md#硬件验证范围)。
-
-## 使用示例
-
-完成下方安装后，在仓库根目录执行。将 `/path/to/video.mp4` 替换为自己的本地视频路径，路径含空格时保留引号。
-
-```sh
-# 无需连接设备：导出从第 30 秒开始的 5 秒拼接预览
-uv run streamdock play "/path/to/video.mp4" --start 30 --seconds 5 --preview previews/video.mp4
-open previews/video.mp4
-
-# 连接设备后：在全部按键屏播放 10 秒
-uv run streamdock play "/path/to/video.mp4" --seconds 10
-
-# 循环播放完整视频；Ctrl+C 停止
-uv run streamdock play "/path/to/video.mp4" --loop
-
-# 只在第 8 个逻辑按键上播放
-uv run streamdock play "/path/to/video.mp4" --key 8 --fps 15
-```
-
-预览成功后输出 `预览已保存：<输出文件的绝对路径>`。设备播放正常结束后输出 JSON 统计，包含已发送帧数 `sent_frames`、丢弃帧数 `dropped_frames` 和循环重启次数 `loops`。
+当前适配目标是 macOS 上的 Mirabox **M18V25E**：15 个 64×64 按键屏和 3 个底部无屏按键。设备画面与物理按键位置仍需实机验证，详见[硬件验证范围](docs/development.md#硬件验证范围)。
 
 ## 安装与连接
 
-需要 Python 3.11+、[uv](https://docs.astral.sh/uv/) 和包含 `ffmpeg`、`ffprobe` 的 [FFmpeg](https://ffmpeg.org/)。预览导出还需要 FFmpeg 支持 `libx264` 编码器。以下命令均在仓库根目录执行。
+需要 Python 3.11+ 和 [uv](https://docs.astral.sh/uv/)。在仓库根目录执行：
 
 ```sh
-# macOS 使用 Homebrew 安装 FFmpeg
-brew install ffmpeg
 uv sync --locked
+uv run decklet devices
 ```
 
-官方 SDK 和配套原生通信库已随项目提供，完成上述安装后即可连接设备。源码和 wheel 均包含 SDK，无需单独下载或设置路径。上游同步流程见[开发指南](docs/development.md#官方-sdk-版本管理)。
+SDK 和原生通信库随项目提供。连接 USB 后，退出可能占用设备的 Mirabox StreamDock 软件。`devices` 输出 JSON 数组，`[]` 表示未发现设备；当前 `runtime_supported: true` 表示运行时支持的 M18。
 
-通过 USB 连接 M18，退出可能同时更新按键画面的 Mirabox StreamDock 软件，再检查设备：
+## 运行自己的脚本
+
+```python
+# dashboard.py
+from PIL import Image, ImageDraw
+from decklet import App, Context, KeyEvent
+
+app = App()
+count = 0
+
+
+def render(ctx: Context):
+    image = Image.new("RGB", ctx.device.key_image_size, "#18212b")
+    ImageDraw.Draw(image).text((12, 24), str(count), fill="white")
+    ctx.display.set_key(1, image)
+
+
+@app.on_start
+async def start(ctx: Context):
+    render(ctx)
+
+
+@app.on_key(1)
+async def increment(ctx: Context, event: KeyEvent):
+    global count
+    count += 1
+    render(ctx)
+```
 
 ```sh
-uv run streamdock devices
+uv run decklet run ./dashboard.py
+
+# 多台设备时选择一台；-- 后的参数交给脚本
+uv run decklet run --serial YOUR_DEVICE_SERIAL ./dashboard.py -- --city Shanghai
+
+# 仓库自带的计数器：按键 1 计数，底部按键 18 退出
+uv run decklet run apps/counter/app.py
 ```
 
-命令输出设备 JSON 数组；`[]` 表示未枚举到设备，`playback_supported: true` 表示支持播放。多台 M18 同时连接时，使用 `--serial` 指定其中一台。SDK 随 Python 包加载，不依赖当前工作目录。
+按键编号从 1 开始，按上到下、左到右排列。脚本使用 Pillow 图片和逻辑编号，无需处理 JPEG 编码或硬件槽位。Ctrl+C 退出并清理设备连接；脚本异常会显示 traceback。画面更新会覆盖对应按键，退出不会恢复原图标。
 
-## 播放控制
+## 视频示例
 
-| 底部无屏按键 | 操作 |
-| --- | --- |
-| 左 | 快退 10 秒 |
-| 中 | 暂停 / 继续 |
-| 右 | 快进 10 秒 |
+[视频应用](apps/video/README.md) 展示整屏渲染、异步任务、按键交互和重连后的状态恢复。它保留了缓存、片段、循环、暂停、跳转、间距补偿及离线预览，需要额外安装包含 `ffmpeg`、`ffprobe` 的 [FFmpeg](https://ffmpeg.org/)。
 
-暂停时仍可跳转，显示目标位置的一帧后保持暂停。跳转范围限于当前视频或指定片段；按住按键只触发一次。Ctrl+C 停止播放并释放连接。
+```sh
+brew install ffmpeg
 
-默认以 10 fps 将画面等比缩放、补黑边后，拼接到 5×3 个 64×64 按键屏。完整参数、逻辑按键编号、间距调整和缓存操作见[使用指南](docs/usage.md)。
+# 播放本地视频（无音频）
+uv run decklet run apps/video/app.py -- "/path/to/video.mp4" --loop
 
-## 使用前须知
+# 无需设备：导出 5 秒预览
+uv run decklet run apps/video/app.py -- "/path/to/video.mp4" --seconds 5 --preview previews/video.mp4
+```
 
-- 仅接收本地视频文件，格式取决于本机 FFmpeg；不提供默认视频或自动下载。
-- 播放会覆盖所选按键的画面，停止后不恢复原图标，可重新打开官方软件恢复页面；程序不主动修改亮度、LED 或背景图。
-- 首次设备播放会先缓存**整段视频**，即使只播放一个片段；想直接开始实时解码可用 `--no-cache`。缓存不会自动清理，管理方法见[视频缓存](docs/usage.md#视频缓存)。
-- 实际帧率受 USB 和设备吞吐量限制；发送较慢时跳过过期帧，避免延迟累积。
-- 预览不模拟 JPEG 压缩或 USB 速度，已有输出文件不会被覆盖。
+视频已从库内命令移到 `apps/`，原 `streamdock play` 入口不再提供。示例随源码包提供，wheel 仅安装框架。
 
-## 开发与文档
+## 文档
 
-- [使用指南](docs/usage.md)：命令参数、间距补偿、缓存管理与常见问题。
-- [开发指南](docs/development.md)：开发验证、代码结构、硬件适配与缓存实现。
+- [脚本 API 与生命周期](docs/usage.md)：事件、定时任务、画面、脚本参数和重连约定。
+- [视频示例指南](apps/video/README.md)：视频参数、缓存、跳转与预览。
+- [开发指南](docs/development.md)：测试、代码结构、打包和 SDK 同步。

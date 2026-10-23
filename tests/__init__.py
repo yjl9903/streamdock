@@ -1,1 +1,1 @@
-"""StreamDock test suite."""
+"""Decklet test suite."""

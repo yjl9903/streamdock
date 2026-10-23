@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from PIL import Image
 
-from streamdock.commands.video.playback import (
+from apps.video.playback import (
     VideoOptions,
     jpeg_tiles,
     play_frames,
@@ -13,7 +13,7 @@ from streamdock.commands.video.playback import (
 
 
 class PlaybackTests(unittest.TestCase):
-    def test_tiles_preserve_positions_and_map_hardware_once(self):
+    def test_tiles_preserve_positions_and_logical_keys(self):
         frame = Image.new("RGB", (320, 192))
         for key in range(15):
             row, column = divmod(key, 5)
@@ -22,9 +22,7 @@ class PlaybackTests(unittest.TestCase):
                 (column * 64, row * 64, column * 64 + 64, row * 64 + 64),
             )
         tiles = jpeg_tiles(frame, VideoOptions())
-        self.assertEqual(
-            [slot for slot, _ in tiles], [11, 12, 13, 14, 15, 6, 7, 8, 9, 10, 1, 2, 3, 4, 5]
-        )
+        self.assertEqual([slot for slot, _ in tiles], list(range(1, 16)))
         for index, (_, data) in enumerate(tiles):
             with Image.open(io.BytesIO(data)) as tile:
                 self.assertEqual(tile.size, (64, 64))
@@ -33,7 +31,7 @@ class PlaybackTests(unittest.TestCase):
 
     def test_single_key_uses_logical_position(self):
         tiles = jpeg_tiles(Image.new("RGB", (64, 64)), VideoOptions(key=11))
-        self.assertEqual([slot for slot, _ in tiles], [1])
+        self.assertEqual([slot for slot, _ in tiles], [11])
 
     def test_slow_device_drops_frames_without_slowing_timeline(self):
         now = [0.0]
