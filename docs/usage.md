@@ -1,20 +1,26 @@
 # 脚本 API 与运行时
 
-[返回 README](../README.md) · [视频示例](../apps/video/README.md) · [开发指南](development.md)
-
 ## CLI 与脚本加载
+
+以下命令在仓库根目录执行，`dashboard.py` 使用 README 中的计数器脚本。
 
 ```sh
 uv run decklet info
 uv run decklet devices
 uv run decklet run --help
 uv run decklet run ./dashboard.py
-uv run decklet run --serial YOUR_DEVICE_SERIAL ./dashboard.py -- --city Shanghai
+uv run decklet run --serial YOUR_DEVICE_SERIAL ./dashboard.py
 ```
 
 `info` 输出参考设备资料，不探测硬件。`devices` 枚举设备；运行时目前只接入 M18。`run` 加载一个导出 `app = App()` 的 `.py` 文件，一个进程控制一台设备。`--serial` 必须放在脚本路径前，脚本参数放在 `--` 后。
 
 脚本只导入一次；同目录模块可在顶层或回调内导入。每个应用拥有独立包名，推荐使用 `from .helper import ...` 相对导入，也支持 `import helper`。工作目录不会改变。资源文件建议使用 `ctx.script_dir / "assets/icon.png"`；`ctx.args` 为脚本参数列表，加载时 `sys.argv` 同样设为脚本路径与参数。因此可以在顶层用 `argparse` 解析，让 `--help` 在连接设备前退出。Python 依赖使用当前环境，CLI 不自动安装依赖。脚本按普通 Python 程序执行。
+
+例如，视频应用用 `argparse` 解析 `--` 后的参数：
+
+```sh
+uv run decklet run apps/video/app.py -- --help
+```
 
 ## App 与事件
 

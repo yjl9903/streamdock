@@ -1,10 +1,8 @@
 # 开发指南
 
-[返回 README](../README.md) · [使用指南](usage.md)
-
 ## 开发与验证
 
-环境要求和安装方式见 [README](../README.md#安装与连接)。在仓库根目录同步依赖并运行测试：
+在仓库根目录同步依赖并运行检查：
 
 ```sh
 uv sync --locked
@@ -13,7 +11,7 @@ uv run ruff format --check .
 uv run python -m unittest discover -s . -v
 ```
 
-测试使用 `unittest`。根目录 `tests/` 存放框架测试，应用自己的测试随应用放在 `apps/<name>/tests/`；上述命令从仓库根目录发现并运行两部分。硬件相关测试通过模拟对象验证发送和清理行为，无需连接设备；FFmpeg 集成测试生成临时视频，没有 `ffmpeg` 时会跳过，执行这些测试还需要 `libx264` 编码器。
+测试使用 `unittest`。根目录 `tests/` 存放框架测试，应用自己的测试随应用放在 `apps/<name>/tests/`；上述命令从仓库根目录发现并运行两部分。硬件相关测试通过模拟对象验证发送和清理行为，无需连接设备。各应用的测试命令和依赖见[应用开发指南](#应用开发指南)。
 
 自有 Python 代码使用 Ruff 检查和格式化；可运行 `uv run ruff check --fix .` 与 `uv run ruff format .` 整理代码。`_vendor` 中的 SDK 保留同步结果，不参与格式化。Ruff 版本由开发依赖和 `uv.lock` 固定，CI 执行相同检查。
 
@@ -21,11 +19,9 @@ uv run python -m unittest discover -s . -v
 | --- | --- |
 | `tests/test_runtime.py` | 生命周期、输入去重、USB 单线程、更新合并、原设备重连、错误与取消清理 |
 | `tests/test_display.py` | 图片快照、逻辑编号、间距、并发更新确认与刷新等待 |
-| `apps/counter/tests/` 和 `apps/video/tests/test_app.py` | 真实 FFmpeg 与模拟设备驱动的视频应用、离线 CLI 和计数器 |
 | `tests/test_loader.py` | 脚本参数、同目录导入、路径恢复和加载错误 |
 | `tests/test_hardware.py` | SDK 加载、通信错误和设备资源清理 |
 | `tests/test_update_sdk.py` | SDK 同步、校验、补丁及回滚 |
-| `apps/video/tests/` | 视频缓存、解码、预览、间距、暂停、跳转与恢复 |
 
 ## GitHub CI
 
@@ -44,7 +40,7 @@ GitHub Actions 的 `CI` 工作流在推送到 `main`、提交或更新 PR，以�
 
 SDK 的精简运行副本位于 `src/streamdock/_vendor/mirabox/`，随源码包和 wheel 提供。普通用户只需 `uv sync --locked`，无需初始化子模块、克隆 SDK 或设置环境变量。当前上游基线为 `7f0d47fe91033b0883edf29b574a6c74ea9bed00`，精确来源以 [SOURCE.json](../src/streamdock/_vendor/mirabox/SOURCE.json) 为准。
 
-上游直接构建的 wheel 缺少原生通信库，因此保留上游运行模块及配套原生库，保留既有的 `streamdock._vendor.mirabox` 私有命名空间和导入补丁。Decklet 的硬件适配层引用该路径；项目重命名不修改 vendor 内容或来源记录。业务适配继续放在 `hardware.py`，不直接修改 SDK 副本。
+上游直接构建的 wheel 缺少原生通信库，因此项目收录上游运行模块及配套原生库，通过导入补丁使用 `streamdock._vendor.mirabox` 私有命名空间。Decklet 的硬件适配层引用该路径。业务适配放在 `hardware.py`，不直接修改 SDK 副本。
 
 ### 同步到新的上游版本
 
@@ -89,11 +85,9 @@ python3 scripts/update_sdk.py --check --source /absolute/path/to/upstream-sdk
 
 ### 分发与平台范围
 
-源码包包含全部已收录平台库、同步脚本、补丁和来源记录。wheel 只包含构建平台所需的通信库，并使用平台标签：macOS 11+ universal2（Intel / Apple Silicon）、Linux x86_64 或 aarch64。Windows 和其他架构当前没有构建配置。Linux wheel 使用 `linux_*` 标签，不宣称 manylinux/musllinux 兼容；实际运行还受上游二进制和系统库限制。M18 实机适配目标仍为 macOS，Linux CI 只验证加载与非硬件逻辑。
+源码包包含 `apps/` 示例应用、全部已收录平台库、同步脚本、补丁和来源记录。wheel 是供安装使用的 Python 发行包，包含 `decklet` 框架和 SDK，不包含 `apps/`；原生通信库只包含构建平台所需的版本，并使用平台标签：macOS 11+ universal2（Intel / Apple Silicon）、Linux x86_64 或 aarch64。Windows 和其他架构当前没有构建配置。Linux wheel 使用 `linux_*` 标签，不宣称 manylinux/musllinux 兼容；实际运行还受上游二进制和系统库限制。M18 实机适配目标仍为 macOS，Linux CI 只验证加载与非硬件逻辑。
 
 [hatch_build.py](../hatch_build.py) 在构建前校验 SDK 完整性，[check_wheel.py](../scripts/check_wheel.py) 检查最终 wheel 的文件与平台元数据。升级原生库时需要重新检查架构、最低系统版本和动态链接依赖，必要时调整 `config.json` 的平台标签；固定 commit 不代表二进制兼容性自动成立。
-
-旧 `.cache/StreamDock-Device-SDK/` 不再使用；确认没有个人改动后可自行删除。`STREAMDOCK_SDK_PATH` 不再读取，SDK 不依赖外部路径。
 
 ## 代码结构
 
@@ -113,21 +107,13 @@ src/decklet/
 src/streamdock/_vendor/
   mirabox/               保持原样的固定版本 SDK 和原生库
 apps/
-  counter/
-    app.py               最小交互应用
-    tests/               计数器应用测试
-  video/
-    app.py               视频应用入口，导出 app
-    cli.py               示例参数及 App 生命周期注册
-    controls.py          KeyEvent 到视频操作的映射
-    player.py            异步播放、暂停、跳转和时钟
-    playback.py          FFmpeg 解码、编码辅助及离线预览
-    cache.py             视频 JPEG 缓存
-    README.md            视频参数及实现说明
-    tests/               视频单元测试、应用集成测试及模拟设备
+  counter/               计数器应用及其测试
+  video/                 视频播放器及其测试
 ```
 
-框架不导入视频示例，也不要求 FFmpeg。示例随源码包发布，wheel 包含 `decklet` 框架和原有 `streamdock._vendor` SDK。旧 `commands/video/` 与 `streamdock play` 已移除。
+每个应用的 `README.md` 介绍使用方式，`DEVELOPMENT.md` 记录实现与测试。
+
+框架不导入视频示例，也不要求 FFmpeg。应用及各自的测试集中在 `apps/` 下。
 
 ## 应用运行流程
 
@@ -138,7 +124,7 @@ apps/
 5. 空闲时也检查连接。断线锁定原序列号重试，清除旧连接输入，保留脚本状态及目标画面。连接恢复独立于回调调度，避免等待 `flush()` 的回调阻塞重连。
 6. 退出时取消受管任务，等待当前设备操作完成，恢复底层回调并释放 USB，最后执行所有 `on_stop` 清理函数。
 
-事件处理函数在 `await` 处让出执行，不应做阻塞调用。视频示例将解码和 SQLite 访问放在自己的工作线程；所有图片提交仍回到应用循环，底层 USB 只由运行时操作。
+事件处理函数在 `await` 处让出执行，不应做阻塞调用。应用需要自行将阻塞工作放入工作线程；图片提交回到应用循环，底层 USB 只由运行时操作。
 
 ## 硬件适配与按键映射
 
@@ -153,37 +139,19 @@ apps/
 
 官方高层 `set_key_image` 自带映射。本项目使用底层 `set_key_image_stream` 发送内存 JPEG，因此由 `runtime.py` 在发送前转换一次，切片和用户脚本始终使用逻辑编号。参考固定 SDK 版本的[官方 M18 驱动](https://github.com/MiraboxSpace/StreamDock-Device-SDK/blob/7f0d47fe91033b0883edf29b574a6c74ea9bed00/Python-SDK/src/StreamDock/Devices/StreamDockM18.py)。
 
-框架负责按键边沿去重；视频示例由 [controls.py](../apps/video/controls.py) 绑定底部无屏按键。
-
-| 位置 | SDK 逻辑编号 | 硬件码 | 播放命令 |
-| --- | --- | --- | --- |
-| 左 | 16 | `0x25` | `rewind` |
-| 中 | 17 | `0x30` | `pause` |
-| 右 | 18 | `0x31` | `forward` |
-
-逻辑编号与硬件码来自上述官方驱动；物理位置顺序沿用当前项目绑定，仍需实机核对。
-
-固定版本 SDK 的背景 MP4 接口仅支持 N4Pro、XL、M3，M18 不在其中，所以本项目使用按键图片流。参见[官方视频接口说明](https://github.com/MiraboxSpace/StreamDock-Device-SDK/blob/7f0d47fe91033b0883edf29b574a6c74ea9bed00/Python-SDK/README.md)。
+框架负责按键边沿去重。视频应用的按键绑定见[视频播放器开发指南](../apps/video/DEVELOPMENT.md#按键与设备输出)。
 
 连接时避免调用会清空图标并将亮度设为 100% 的 `init()`，只调用 `set_device()` 和 `wakeScreen()`。每帧逐槽发送 JPEG，全部成功后才 `refresh()`；传输不可写超过 3 秒或发送返回非零值时停止。关闭连接使用 `close(notify=False)`。
 
-## 缓存实现
+## 应用开发指南
 
-使用方式和清理方法见[视频缓存](../apps/video/README.md#视频缓存)。实现位于 [cache.py](../apps/video/cache.py)，每份缓存为一个 SQLite 文件：
+各应用的实现与测试说明随应用维护：
 
-- `metadata` 表存储缓存身份和总帧数；`frames` 表以 `idx` 为主键，存储 JPEG 数据及 CRC32 校验值。
-- 每帧按逻辑按键顺序存储各张 JPEG，前置四字节大端长度；读取时校验帧连续性、CRC32、长度及 JPEG 首尾标记。
-- 文件名由缓存身份的 SHA-256 得到。身份包含源文件绝对路径、大小、纳秒修改时间、渲染参数、逻辑按键与图片尺寸、Pillow 版本和 `CACHE_VERSION`。
-- 构造缓存身份时将 `start` 归零、`seconds` 清空；单键模式将 `gap` 归零。`loop` 不参与身份计算。
-- 生成时逐帧解码、编码和写入临时数据库，完成后再次核对源文件身份，再用 `os.replace` 原子替换正式文件；中断重建保留旧缓存。
-- 加载时检查元数据、帧数与索引范围，结构不完整则重建；帧内容在播放读取时校验，失败则提示 `--rebuild-cache`。
-
-当前 `CACHE_VERSION = 2`，旧硬件槽位缓存不再复用。修改编码格式或渲染语义时应递增 `CACHE_VERSION`，避免复用不兼容缓存。
+- [计数器开发指南](../apps/counter/DEVELOPMENT.md)：绘图、按键交互及应用测试。
+- [视频播放器开发指南](../apps/video/DEVELOPMENT.md)：播放流程、后台任务、按键绑定、缓存实现及应用测试。
 
 ## 硬件验证范围
 
 当前适配目标为本地配置中的 M18V25E，运行时入口仅接受 SDK 的 `StreamDockM18` 驱动实例。`info` 不探测硬件，其 `hardware_verified` 固定为 `false`，不能用它判断 USB 是否连接或实机效果是否通过。
-
-原 README 记录曾识别本地 M18，并完成 10 秒、100 帧发送测试，程序侧无丢帧或报错；另记录用户提供的 Mirabox StreamDock 软件版本为 `3.10.205.0918`。这些是历史记录，仓库没有对应测试日志，本次文档整理未重新进行硬件验证。
 
 设备画面效果、底部按键物理位置及实际间距仍需实机确认。自动化测试不能替代这些检查，也不能证明其他型号或系统可用。
