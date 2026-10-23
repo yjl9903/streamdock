@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: Run all supported OS and Python combinations
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,8 +26,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        python-version: ["3.11", "3.14"]
+        os: ${{ fromJSON(inputs.full_matrix && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
+        python-version: ${{ fromJSON(inputs.full_matrix && '["3.11", "3.14"]' || '["3.11"]') }}
 
     defaults:
       run:

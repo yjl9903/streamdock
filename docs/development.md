@@ -31,7 +31,7 @@ uv run python -m unittest discover -s . -v
 
 GitHub Actions 的 `CI` 工作流在推送到 `main`、提交或更新 PR，以及手动触发时运行。配置位于 `.github/workflows/ci.yml`。
 
-测试矩阵为 macOS、Ubuntu × Python 3.11、3.14，每组执行：
+默认只运行 Ubuntu / Python 3.11。需要检查其他组合时，在 Actions 中手动运行工作流并勾选 `full_matrix`，即可运行完整的 macOS、Ubuntu × Python 3.11、3.14 测试矩阵。每组执行：
 
 1. 安装 FFmpeg，并确认 `ffmpeg`、`ffprobe` 和 `libx264` 可用，避免集成测试因缺少 FFmpeg 被跳过。
 2. 用 `uv sync --locked` 安装锁定依赖，离线校验 SDK 文件与补丁哈希，验证原生库可加载，再运行全部 `unittest` 测试。Ubuntu / Python 3.11 另外从上游下载固定版本，检查同步结果完全一致。
