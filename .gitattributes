@@ -1,0 +1,4 @@
+# Keep vendored bytes identical to SOURCE.json on every checkout.
+src/streamdock/_vendor/mirabox/** -text
+scripts/sdk/config.json text eol=lf
+scripts/sdk/patches/*.patch text eol=lf

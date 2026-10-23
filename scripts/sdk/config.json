@@ -1,0 +1,62 @@
+{
+  "repository": "https://github.com/MiraboxSpace/StreamDock-Device-SDK",
+  "source_directory": "Python-SDK/src/StreamDock",
+  "files": [
+    "DeviceConfig.py",
+    "DeviceManager.py",
+    "Devices/GifController.py",
+    "Devices/K1Pro.py",
+    "Devices/StreamDock.py",
+    "Devices/StreamDock293.py",
+    "Devices/StreamDock293V3.py",
+    "Devices/StreamDock293s.py",
+    "Devices/StreamDock293sV3.py",
+    "Devices/StreamDockH1Pro.py",
+    "Devices/StreamDockM18.py",
+    "Devices/StreamDockM3.py",
+    "Devices/StreamDockMini.py",
+    "Devices/StreamDockN1.py",
+    "Devices/StreamDockN3.py",
+    "Devices/StreamDockN4.py",
+    "Devices/StreamDockN4Pro.py",
+    "Devices/StreamDockXL.py",
+    "Devices/__init__.py",
+    "FeatrueOption.py",
+    "ImageHelpers/PILHelper.py",
+    "ImageHelpers/__init__.py",
+    "InputTypes.py",
+    "ProductIDs.py",
+    "Transport/LibUSBHIDAPI.py",
+    "Transport/TransportDLL/libtransport.dylib",
+    "Transport/TransportDLL/libtransport.so",
+    "Transport/TransportDLL/libtransport_arm64.so",
+    "Transport/__init__.py",
+    "__init__.py"
+  ],
+  "license": "Python-SDK/LICENSE",
+  "patches": [
+    "patches/0001-private-imports.patch"
+  ],
+  "platforms": {
+    "Darwin": {
+      "arm64": {
+        "tag": "macosx_11_0_universal2",
+        "library": "libtransport.dylib"
+      },
+      "x86_64": {
+        "tag": "macosx_11_0_universal2",
+        "library": "libtransport.dylib"
+      }
+    },
+    "Linux": {
+      "x86_64": {
+        "tag": "linux_x86_64",
+        "library": "libtransport.so"
+      },
+      "aarch64": {
+        "tag": "linux_aarch64",
+        "library": "libtransport_arm64.so"
+      }
+    }
+  }
+}

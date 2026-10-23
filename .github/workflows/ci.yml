@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.14"]
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.11.6"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install FFmpeg on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
+      - name: Install FFmpeg on macOS
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            brew install ffmpeg
+          fi
+
+      - name: Verify FFmpeg and H.264 encoder
+        run: |
+          ffmpeg -version
+          ffprobe -version
+          ffmpeg -hide_banner -loglevel error -f lavfi \
+            -i color=c=black:s=64x64:r=1:d=1 -c:v libx264 -f null -
+
+      - name: Install locked dependencies
+        run: uv sync --locked
+
+      - name: Check code style
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync ruff format --check .
+
+      - name: Verify pinned SDK and native library without USB access
+        run: |
+          uv run --no-sync python scripts/update_sdk.py --verify
+          uv run --no-sync python -c 'from streamdock.hardware import load_sdk; load_sdk()'
+
+      - name: Reproduce SDK from pinned upstream source
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: uv run --no-sync python scripts/update_sdk.py --check
+
+      - name: Run unit and FFmpeg integration tests
+        run: uv run --no-sync python -m unittest discover -s tests -v
+
+      - name: Build source distribution and wheel
+        run: uv build --no-sources
+
+      - name: Check wheel SDK contents and platform metadata
+        run: uv run --no-sync python scripts/check_wheel.py dist/*.whl
+
+      - name: Check documentation in source distribution
+        run: |
+          uv run --no-sync python - <<'PY'
+          from pathlib import Path
+          import tarfile
+
+          archive, = Path("dist").glob("*.tar.gz")
+          with tarfile.open(archive) as package:
+              names = package.getnames()
+              root = names[0].split("/", 1)[0]
+              for path in ("README.md", "docs/usage.md", "docs/development.md"):
+                  content = package.extractfile(f"{root}/{path}").read()
+                  if content != Path(path).read_bytes():
+                      raise SystemExit(f"Source distribution contains stale documentation: {path}")
+          PY
+
+      - name: Smoke test installed wheel outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/wheel-venv"
+          uv pip install --python "$RUNNER_TEMP/wheel-venv/bin/python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/wheel-venv/bin/streamdock" --help
+          "$RUNNER_TEMP/wheel-venv/bin/streamdock" play --help
+          "$RUNNER_TEMP/wheel-venv/bin/streamdock" info
+          "$RUNNER_TEMP/wheel-venv/bin/python" -c 'from streamdock.hardware import load_sdk; load_sdk()'

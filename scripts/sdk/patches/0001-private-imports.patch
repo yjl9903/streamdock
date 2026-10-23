@@ -1,0 +1,118 @@
+--- a/Devices/K1Pro.py
++++ b/Devices/K1Pro.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType, KnobId, Direction
+ from PIL import Image
+--- a/Devices/StreamDock.py
++++ b/Devices/StreamDock.py
+@@ -670,7 +670,7 @@
+ 
+         Example:
+             def on_input(device, event):
+-                from StreamDock.InputTypes import EventType
++                from streamdock._vendor.mirabox.InputTypes import EventType
+                 if event.event_type == EventType.BUTTON:
+                     print(f"Key {event.key.value} pressed")
+                 elif event.event_type == EventType.KNOB_ROTATE:
+--- a/Devices/StreamDock293.py
++++ b/Devices/StreamDock293.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType
+ from PIL import Image
+--- a/Devices/StreamDock293V3.py
++++ b/Devices/StreamDock293V3.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType
+ from PIL import Image
+--- a/Devices/StreamDock293s.py
++++ b/Devices/StreamDock293s.py
+@@ -1,5 +1,5 @@
+ # -*- coding: utf-8 -*-
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType
+ from PIL import Image
+--- a/Devices/StreamDock293sV3.py
++++ b/Devices/StreamDock293sV3.py
+@@ -1,5 +1,5 @@
+ # -*- coding: utf-8 -*-
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType
+ from PIL import Image
+--- a/Devices/StreamDockM18.py
++++ b/Devices/StreamDockM18.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType
+ from PIL import Image
+--- a/Devices/StreamDockM3.py
++++ b/Devices/StreamDockM3.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import Direction, InputEvent, ButtonKey, EventType, KnobId
+ from PIL import Image
+--- a/Devices/StreamDockMini.py
++++ b/Devices/StreamDockMini.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType, DIPSwitchId, Direction
+ from PIL import Image
+--- a/Devices/StreamDockN1.py
++++ b/Devices/StreamDockN1.py
+@@ -1,5 +1,5 @@
+ # -*- coding: utf-8 -*-
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType, KnobId, Direction
+ from PIL import Image
+--- a/Devices/StreamDockN3.py
++++ b/Devices/StreamDockN3.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType, KnobId, Direction
+ from PIL import Image
+--- a/Devices/StreamDockN4.py
++++ b/Devices/StreamDockN4.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..InputTypes import InputEvent, ButtonKey, EventType, KnobId, Direction
+ from PIL import Image
+--- a/Devices/StreamDockN4Pro.py
++++ b/Devices/StreamDockN4Pro.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..DeviceConfig import StreamDockN4ProConfig
+ from ..InputTypes import InputEvent, ButtonKey, EventType, KnobId, Direction
+--- a/Devices/StreamDockXL.py
++++ b/Devices/StreamDockXL.py
+@@ -1,4 +1,4 @@
+-from StreamDock.FeatrueOption import device_type
++from streamdock._vendor.mirabox.FeatrueOption import device_type
+ from .StreamDock import StreamDock
+ from ..DeviceConfig import StreamDockXLConfig
+ from ..InputTypes import InputEvent, ButtonKey, EventType, DIPSwitchId, Direction

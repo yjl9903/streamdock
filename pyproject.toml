@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.26,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "streamdock-local"
+version = "0.1.0"
+description = "Local StreamDock integration for Mirabox M18 devices"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pillow>=11,<13", "pyudev>=0.24; sys_platform == 'linux'"]
+
+[project.scripts]
+streamdock = "streamdock.cli:main"
+
+[dependency-groups]
+dev = ["ruff==0.17.2"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = [".cache", "src/streamdock/_vendor"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/streamdock"]
+exclude = ["/src/streamdock/_vendor/mirabox/Transport/TransportDLL/*"]
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src/streamdock",
+  "/tests",
+  "/docs",
+  "/scripts",
+  "/hatch_build.py",
+  "/README.md",
+  "/pyproject.toml",
+  "/uv.lock",
+]
